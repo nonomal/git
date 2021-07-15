@@ -179,6 +179,8 @@ static int http_schannel_check_revoke_mode =
  */
 static int http_schannel_use_ssl_cainfo;
 
+static int http_auto_client_cert;
+
 size_t fread_buffer(char *ptr, size_t eltsize, size_t nmemb, void *buffer_)
 {
 	size_t size = eltsize * nmemb;
@@ -354,6 +356,11 @@ static int http_options(const char *var, const char *value, void *cb)
 
 	if (!strcmp("http.schannelusesslcainfo", var)) {
 		http_schannel_use_ssl_cainfo = git_config_bool(var, value);
+		return 0;
+	}
+
+	if (!strcmp("http.sslautoclientcert", var)) {
+		http_auto_client_cert = git_config_bool(var, value);
 		return 0;
 	}
 
@@ -920,13 +927,24 @@ static CURL *get_curl_handle(void)
 	}
 #endif
 
-	if (http_ssl_backend && !strcmp("schannel", http_ssl_backend) &&
-	    http_schannel_check_revoke_mode) {
+	if (http_ssl_backend && !strcmp("schannel", http_ssl_backend)) {
+		long ssl_options = 0;
+		if (http_schannel_check_revoke_mode) {
 #if LIBCURL_VERSION_NUM >= 0x072c00
-		curl_easy_setopt(result, CURLOPT_SSL_OPTIONS, http_schannel_check_revoke_mode);
+			ssl_options |= http_schannel_check_revoke_mode;
 #else
-		warning(_("CURLSSLOPT_NO_REVOKE not supported with cURL < 7.44.0"));
+			warning(_("CURLSSLOPT_NO_REVOKE not supported with cURL < 7.44.0"));
 #endif
+		}
+
+		if (http_auto_client_cert) {
+#if LIBCURL_VERSION_NUM >= 0x074d00
+			ssl_options |= CURLSSLOPT_AUTO_CLIENT_CERT;
+#endif
+		}
+
+		if (ssl_options)
+			curl_easy_setopt(result, CURLOPT_SSL_OPTIONS, ssl_options);
 	}
 
 	if (http_proactive_auth)
@@ -1653,9 +1671,18 @@ static int handle_curl_result(struct slot_results *results)
 
 	if (results->curl_result == CURLE_OK) {
 		credential_approve(&http_auth);
-		if (proxy_auth.password)
-			credential_approve(&proxy_auth);
+		credential_approve(&proxy_auth);
+		credential_approve(&cert_auth);
 		return HTTP_OK;
+	} else if (results->curl_result == CURLE_SSL_CERTPROBLEM) {
+		/*
+		 * We can't tell from here whether it's a bad path, bad
+		 * certificate, bad password, or something else wrong
+		 * with the certificate.  So we reject the credential to
+		 * avoid caching or saving a bad password.
+		 */
+		credential_reject(&cert_auth);
+		return HTTP_NOAUTH;
 	} else if (missing_target(results))
 		return HTTP_MISSING_TARGET;
 	else if (results->http_code == 401) {
@@ -2277,6 +2304,9 @@ void release_http_pack_request(struct http_pack_request *preq)
 	free(preq);
 }
 
+static const char *default_index_pack_args[] =
+	{"index-pack", "--stdin", NULL};
+
 int finish_http_pack_request(struct http_pack_request *preq)
 {
 	struct child_process ip = CHILD_PROCESS_INIT;
@@ -2288,17 +2318,15 @@ int finish_http_pack_request(struct http_pack_request *preq)
 
 	tmpfile_fd = xopen(preq->tmpfile.buf, O_RDONLY);
 
-	strvec_push(&ip.args, "index-pack");
-	strvec_push(&ip.args, "--stdin");
 	ip.git_cmd = 1;
 	ip.in = tmpfile_fd;
-	if (preq->generate_keep) {
-		strvec_pushf(&ip.args, "--keep=git %"PRIuMAX,
-			     (uintmax_t)getpid());
+	ip.argv = preq->index_pack_args ? preq->index_pack_args
+					: default_index_pack_args;
+
+	if (preq->preserve_index_pack_stdout)
 		ip.out = 0;
-	} else {
+	else
 		ip.no_stdout = 1;
-	}
 
 	if (run_command(&ip)) {
 		ret = -1;
@@ -2341,7 +2369,7 @@ struct http_pack_request *new_direct_http_pack_request(
 	off_t prev_posn = 0;
 	struct http_pack_request *preq;
 
-	preq = xcalloc(1, sizeof(*preq));
+	CALLOC_ARRAY(preq, 1);
 	strbuf_init(&preq->tmpfile, 0);
 
 	preq->url = url;
@@ -2436,7 +2464,7 @@ struct http_object_request *new_http_object_request(const char *base_url,
 	off_t prev_posn = 0;
 	struct http_object_request *freq;
 
-	freq = xcalloc(1, sizeof(*freq));
+	CALLOC_ARRAY(freq, 1);
 	strbuf_init(&freq->tmpfile, 0);
 	oidcpy(&freq->oid, oid);
 	freq->localfile = -1;
@@ -2583,7 +2611,7 @@ int finish_http_object_request(struct http_object_request *freq)
 	}
 
 	git_inflate_end(&freq->stream);
-	the_hash_algo->final_fn(freq->real_oid.hash, &freq->c);
+	the_hash_algo->final_oid_fn(&freq->real_oid, &freq->c);
 	if (freq->zret != Z_STREAM_END) {
 		unlink_or_warn(freq->tmpfile.buf);
 		return -1;

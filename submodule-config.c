@@ -103,8 +103,8 @@ static void submodule_cache_clear(struct submodule_cache *cache)
 				ent /* member name */)
 		free_one_config(entry);
 
-	hashmap_free_entries(&cache->for_path, struct submodule_entry, ent);
-	hashmap_free_entries(&cache->for_name, struct submodule_entry, ent);
+	hashmap_clear_and_free(&cache->for_path, struct submodule_entry, ent);
+	hashmap_clear_and_free(&cache->for_name, struct submodule_entry, ent);
 	cache->initialized = 0;
 	cache->gitmodules_read = 0;
 }
@@ -671,7 +671,7 @@ static int gitmodules_cb(const char *var, const char *value, void *data)
 
 	parameter.cache = repo->submodule_cache;
 	parameter.treeish_name = NULL;
-	parameter.gitmodules_oid = &null_oid;
+	parameter.gitmodules_oid = null_oid();
 	parameter.overwrite = 1;
 
 	return parse_config(var, value, &parameter);

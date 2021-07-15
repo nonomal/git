@@ -125,9 +125,11 @@ int cmd_bugreport(int argc, const char **argv, const char *prefix)
 	struct strbuf report_path = STRBUF_INIT;
 	int report = -1;
 	time_t now = time(NULL);
+	struct tm tm;
 	char *option_output = NULL;
 	char *option_suffix = "%Y-%m-%d-%H%M";
 	const char *user_relative_path = NULL;
+	char *prefixed_filename;
 
 	const struct option bugreport_options[] = {
 		OPT_STRING('o', "output-directory", &option_output, N_("path"),
@@ -141,13 +143,13 @@ int cmd_bugreport(int argc, const char **argv, const char *prefix)
 			     bugreport_usage, 0);
 
 	/* Prepare the path to put the result */
-	strbuf_addstr(&report_path,
-		      prefix_filename(prefix,
-				      option_output ? option_output : ""));
+	prefixed_filename = prefix_filename(prefix,
+					    option_output ? option_output : "");
+	strbuf_addstr(&report_path, prefixed_filename);
 	strbuf_complete(&report_path, '/');
 
 	strbuf_addstr(&report_path, "git-bugreport-");
-	strbuf_addftime(&report_path, option_suffix, localtime(&now), 0, 0);
+	strbuf_addftime(&report_path, option_suffix, localtime_r(&now, &tm), 0, 0);
 	strbuf_addstr(&report_path, ".txt");
 
 	switch (safe_create_leading_directories(report_path.buf)) {
@@ -188,6 +190,7 @@ int cmd_bugreport(int argc, const char **argv, const char *prefix)
 	fprintf(stderr, _("Created new report at '%s'.\n"),
 		user_relative_path);
 
+	free(prefixed_filename);
 	UNLEAK(buffer);
 	UNLEAK(report_path);
 	return !!launch_editor(report_path.buf, NULL, NULL);

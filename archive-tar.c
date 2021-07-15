@@ -383,10 +383,11 @@ static int tar_filter_config(const char *var, const char *value, void *data)
 
 	ar = find_tar_filter(name, namelen);
 	if (!ar) {
-		ar = xcalloc(1, sizeof(*ar));
+		CALLOC_ARRAY(ar, 1);
 		ar->name = xmemdupz(name, namelen);
 		ar->write_archive = write_tar_filter_archive;
-		ar->flags = ARCHIVER_WANT_COMPRESSION_LEVELS;
+		ar->flags = ARCHIVER_WANT_COMPRESSION_LEVELS |
+			    ARCHIVER_HIGH_COMPRESSION_LEVELS;
 		ALLOC_GROW(tar_filters, nr_tar_filters + 1, alloc_tar_filters);
 		tar_filters[nr_tar_filters++] = ar;
 	}

@@ -560,8 +560,10 @@ int mingw_rmdir(const char *pathname)
 		return -1;
 
 	do {
-		if (!_wrmdir(wpathname))
+		if (!_wrmdir(wpathname)) {
+			invalidate_lstat_cache();
 			return 0;
+		}
 		if (!is_file_in_use_error(GetLastError()))
 			errno = err_win_to_posix(GetLastError());
 		if (errno != EACCES)
@@ -893,6 +895,8 @@ ssize_t mingw_write(int fd, const void *buf, size_t len)
 int mingw_access(const char *filename, int mode)
 {
 	wchar_t wfilename[MAX_LONG_PATH];
+	if (!strcmp("nul", filename) || !strcmp("/dev/null", filename))
+		return 0;
 	if (xutftowcs_long_path(wfilename, filename) < 0)
 		return -1;
 	/* X_OK is not supported by the MSVCRT version */
@@ -1479,7 +1483,7 @@ static const char *quote_arg_msys2(const char *arg)
 
 static const char *parse_interpreter(const char *cmd)
 {
-	static char buf[100];
+	static char buf[MAX_PATH];
 	char *p, *opt;
 	int n, fd;
 

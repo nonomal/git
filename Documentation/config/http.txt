@@ -42,12 +42,12 @@ http.proxySSLKey::
 http.proxySSLCertPasswordProtected::
 	Enable Git's password prompt for the proxy SSL certificate.  Otherwise OpenSSL
 	will prompt the user, possibly many times, if the certificate or private key
-	is encrypted. Can be overriden by the `GIT_PROXY_SSL_CERT_PASSWORD_PROTECTED`
+	is encrypted. Can be overridden by the `GIT_PROXY_SSL_CERT_PASSWORD_PROTECTED`
 	environment variable.
 
 http.proxySSLCAInfo::
 	Pathname to the file containing the certificate bundle that should be used to
-	verify the proxy with when using an HTTPS proxy. Can be overriden by the
+	verify the proxy with when using an HTTPS proxy. Can be overridden by the
 	`GIT_PROXY_SSL_CAINFO` environment variable.
 
 http.emptyAuth::
@@ -188,6 +188,11 @@ http.schannelUseSSLCAInfo::
 	by default, Git will tell cURL not to use that bundle by default
 	when the `schannel` backend was configured via `http.sslBackend`,
 	unless `http.schannelUseSSLCAInfo` overrides this behavior.
+
+http.sslAutoClientCert::
+	As of cURL v7.77.0, the Secure Channel backend won't automatically
+	send client certificates from the Windows Certificate Store anymore.
+	To opt in to the old behavior, http.sslAutoClientCert can be set.
 
 http.pinnedpubkey::
 	Public key of the https service. It may either be the filename of
