@@ -26,10 +26,10 @@ test_expect_success 'setup' '
 	git commit -m "Initial Version" 2>/dev/null &&
 
 	git checkout -b binary &&
-	perl -pe "y/x/\000/" <file1 >file3 &&
+	tr "x" "\000" <file1 >file3 &&
 	cat file3 >file4 &&
 	git add file2 &&
-	perl -pe "y/\000/v/" <file3 >file1 &&
+	tr "y" "\000" <file3 >file1 &&
 	rm -f file2 &&
 	git update-index --add --remove file1 file2 file3 file4 &&
 	git commit -m "Second Version" &&
@@ -158,4 +158,45 @@ test_expect_success 'apply binary -p0 diff' '
 	test -z "$(git diff --name-status binary -- file3)"
 '
 
+test_expect_success PERL_TEST_HELPERS 'reject truncated binary diff' '
+	do_reset &&
+
+	# this length is calculated to get us very close to
+	# the 8192-byte strbuf we will use to read in the patch.
+	test-tool genrandom foo 6205 >file1 &&
+	git diff --binary >patch &&
+
+	# truncate the patch at the second "literal" line,
+	# but exclude the trailing newline. We must use perl
+	# for this, since tools like "sed" cannot reliably
+	# produce output without the trailing newline.
+	perl -pe "
+		if (/^literal/ && \$count++ >= 1) {
+			chomp;
+			print;
+			exit 0;
+		}
+	" <patch >patch.trunc &&
+
+	do_reset &&
+	test_must_fail git apply patch.trunc 2>err &&
+	line=$(awk "END { print NR + 1 }" patch.trunc) &&
+	test_grep "error: corrupt binary patch at patch.trunc:$line: " err
+'
+
+test_expect_success 'reject unrecognized binary diff' '
+	cat >patch.bad <<-\EOF &&
+	diff --git a/f b/f
+	new file mode 100644
+	index 0000000..7898192
+	GIT binary patch
+	bogus
+	EOF
+	test_must_fail git apply patch.bad 2>err &&
+	cat >expect <<-\EOF &&
+	error: unrecognized binary patch at patch.bad:4
+	error: No valid patches in input (allow with "--allow-empty")
+	EOF
+	test_cmp expect err
+'
 test_done

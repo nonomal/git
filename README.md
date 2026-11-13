@@ -1,9 +1,9 @@
 Git for Windows
 ===============
 
-[![Open in Visual Studio Code](https://open.vscode.dev/badges/open-in-vscode.svg)](https://open.vscode.dev/git-for-windows/git)
-[![Build status](https://github.com/git-for-windows/git/workflows/CI/PR/badge.svg)](https://github.com/git-for-windows/git/actions?query=branch%3Amain+event%3Apush)
-[![Join the chat at https://gitter.im/git-for-windows/git](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/git-for-windows/git?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](CODE_OF_CONDUCT.md)
+[![Open in Visual Studio Code](https://img.shields.io/static/v1?logo=visualstudiocode&label=&message=Open%20in%20Visual%20Studio%20Code&labelColor=2c2c32&color=007acc&logoColor=007acc)](https://open.vscode.dev/git-for-windows/git)
+[![Build status](https://github.com/git-for-windows/git/actions/workflows/main.yml/badge.svg)](https://github.com/git-for-windows/git/actions?query=branch%3Amain+event%3Apush)
 
 This is [Git for Windows](http://git-for-windows.github.io/), the Windows port
 of [Git](http://git-scm.com/).
@@ -11,10 +11,10 @@ of [Git](http://git-scm.com/).
 The Git for Windows project is run using a [governance
 model](http://git-for-windows.github.io/governance-model.html). If you
 encounter problems, you can report them as [GitHub
-issues](https://github.com/git-for-windows/git/issues), discuss them on Git
-for Windows' [Google Group](http://groups.google.com/group/git-for-windows),
-and [contribute bug
-fixes](https://github.com/git-for-windows/git/wiki/How-to-participate).
+issues](https://github.com/git-for-windows/git/issues), discuss them in Git
+for Windows' [Discussions](https://github.com/git-for-windows/git/discussions)
+or on the [Git mailing list](mailto:git@vger.kernel.org), and [contribute bug
+fixes](https://gitforwindows.org/how-to-participate).
 
 To build Git for Windows, please either install [Git for Windows'
 SDK](https://gitforwindows.org/#download-sdk), start its `git-bash.exe`, `cd`
@@ -89,26 +89,32 @@ Please read the file [INSTALL][] for installation instructions.
 Many Git online resources are accessible from <https://git-scm.com/>
 including full documentation and Git related tools.
 
-See [Documentation/gittutorial.txt][] to get started, then see
-[Documentation/giteveryday.txt][] for a useful minimum set of commands, and
-`Documentation/git-<commandname>.txt` for documentation of each command.
+See [Documentation/gittutorial.adoc][] to get started, then see
+[Documentation/giteveryday.adoc][] for a useful minimum set of commands, and
+`Documentation/git-<commandname>.adoc` for documentation of each command.
 If git has been correctly installed, then the tutorial can also be
 read with `man gittutorial` or `git help tutorial`, and the
 documentation of each command with `man git-<commandname>` or `git help
 <commandname>`.
 
-CVS users may also want to read [Documentation/gitcvs-migration.txt][]
+CVS users may also want to read [Documentation/gitcvs-migration.adoc][]
 (`man gitcvs-migration` or `git help cvs-migration` if git is
 installed).
 
 The user discussion and development of core Git take place on the Git
 mailing list -- everyone is welcome to post bug reports, feature
 requests, comments and patches to git@vger.kernel.org (read
-[Documentation/SubmittingPatches][] for instructions on patch submission).
-To subscribe to the list, send an email with just "subscribe git" in
-the body to majordomo@vger.kernel.org. The mailing list archives are
-available at <https://lore.kernel.org/git/>,
-<http://marc.info/?l=git> and other archival sites.
+[Documentation/SubmittingPatches][] for instructions on patch submission
+and [Documentation/CodingGuidelines][]).
+
+Those wishing to help with error message, usage and informational message
+string translations (localization l10) should see [po/README.md][]
+(a `po` file is a Portable Object file that holds the translations).
+
+To subscribe to the list, send an email to <git+subscribe@vger.kernel.org>
+(see https://subspace.kernel.org/subscribing.html for details). The mailing
+list archives are available at <https://lore.kernel.org/git/>,
+<https://marc.info/?l=git> and other archival sites.
 The core git mailing list is plain text (no HTML!).
 
 Issues which are security relevant should be disclosed privately to
@@ -133,7 +139,9 @@ and the name as (depending on your mood):
  - "goddamn idiotic truckload of sh*t": when it breaks
 
 [INSTALL]: INSTALL
-[Documentation/gittutorial.txt]: Documentation/gittutorial.txt
-[Documentation/giteveryday.txt]: Documentation/giteveryday.txt
-[Documentation/gitcvs-migration.txt]: Documentation/gitcvs-migration.txt
+[Documentation/gittutorial.adoc]: Documentation/gittutorial.adoc
+[Documentation/giteveryday.adoc]: Documentation/giteveryday.adoc
+[Documentation/gitcvs-migration.adoc]: Documentation/gitcvs-migration.adoc
 [Documentation/SubmittingPatches]: Documentation/SubmittingPatches
+[Documentation/CodingGuidelines]: Documentation/CodingGuidelines
+[po/README.md]: po/README.md

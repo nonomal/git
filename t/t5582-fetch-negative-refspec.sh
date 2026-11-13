@@ -105,7 +105,6 @@ test_expect_success "fetch with negative pattern refspec does not expand prefix"
 '
 
 test_expect_success "fetch with negative refspec avoids duplicate conflict" '
-	cd "$D" &&
 	(
 		cd one &&
 		git branch dups/a &&
@@ -281,6 +280,10 @@ test_expect_success '--prefetch succeeds when refspec becomes empty' '
 	git -C one config remote.origin.tagopt "--no-tags" &&
 
 	git -C one fetch --prefetch
+'
+
+test_expect_success '--prefetch succeeds with empty command line refspec' '
+	git -C one fetch --prefetch origin +refs/tags/extra
 '
 
 test_done

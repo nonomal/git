@@ -32,7 +32,7 @@ Git for Windows is a "friendly fork" of [Git](https://git-scm.com/), i.e. change
 
 While Git maintains several release trains (when v2.19.1 was released, there were updates to v2.14.x-v2.18.x, too, for example), Git for Windows follows only the latest Git release. For example, there is no Git for Windows release corresponding to Git v2.16.5 (which was released after v2.19.0).
 
-One exception is [MinGit for Windows](https://github.com/git-for-windows/git/wiki/MinGit) (a minimal subset of Git for Windows, intended for bundling with third-party applications that do not need any interactive commands nor support for `git svn`): critical security fixes are backported to the v2.11.x, v2.14.x, v2.19.x, v2.21.x and v2.23.x release trains.
+One exception is [MinGit for Windows](https://gitforwindows.org/mingit) (a minimal subset of Git for Windows, intended for bundling with third-party applications that do not need any interactive commands nor support for `git svn`): critical security fixes are backported to the v2.11.x, v2.14.x, v2.19.x, v2.21.x and v2.23.x release trains.
 
 ## Version number scheme
 
@@ -56,7 +56,7 @@ Note: there is currently a bug in the "Check daily for updates" code, where it m
 
 ## Snapshot versions ('nightly builds')
 
-Git for Windows also provides snapshots (these are not releases) of the the current development as per git-for-Windows/git's `master` branch at the [Snapshots](https://wingit.blob.core.windows.net/files/index.html) page. This link is also listed in the footer of the [Git for Windows](https://gitforwindows.org/) home page.
+Git for Windows also provides snapshots (these are not releases) of the current development as per git-for-Windows/git's `master` branch at the [Snapshots](https://gitforwindows.org/git-snapshots/) page. This link is also listed in the footer of the [Git for Windows](https://gitforwindows.org/) home page.
 
 Note: even if those builds are not exactly "nightly", they are sometimes referred to as "nightly builds" to keep with other projects' nomenclature.
 

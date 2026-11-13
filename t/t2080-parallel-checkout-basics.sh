@@ -41,6 +41,8 @@ TEST_NO_CREATE_REPO=1
 #  -                  m/m (file)
 #
 test_expect_success 'setup repo for checkout with various types of changes' '
+	test_config_global protocol.file.allow always &&
+
 	git init sub &&
 	(
 		cd sub &&
@@ -140,6 +142,7 @@ do
 	esac
 
 	test_expect_success "$mode checkout on clone" '
+		test_config_global protocol.file.allow always &&
 		repo=various_${mode}_clone &&
 		set_checkout_config $workers $threshold &&
 		test_checkout_workers $expected_workers \
@@ -197,13 +200,13 @@ test_expect_success 'parallel checkout respects --[no]-force' '
 		# We expect 0 workers because there is nothing to be done
 		test_checkout_workers 0 git checkout HEAD &&
 		test_path_is_file D &&
-		grep changed D &&
-		grep changed F.t &&
+		test_grep changed D &&
+		test_grep changed F.t &&
 
 		test_checkout_workers 2 git checkout --force HEAD &&
 		test_path_is_dir D &&
-		grep D/F D/F.t &&
-		grep F F.t
+		test_grep D/F D/F.t &&
+		test_grep F F.t
 	)
 '
 
@@ -221,9 +224,136 @@ test_expect_success SYMLINKS 'parallel checkout checks for symlinks in leading d
 
 		test_checkout_workers 2 git checkout --force HEAD &&
 		! test -h D &&
-		grep D/A D/A.t &&
-		grep D/B D/B.t
+		test_grep D/A D/A.t &&
+		test_grep D/B D/B.t
 	)
+'
+
+# This test is here (and not in e.g. t2022-checkout-paths.sh), because we
+# check the final report including sequential, parallel, and delayed entries
+# all at the same time. So we must have finer control of the parallel checkout
+# variables.
+test_expect_success '"git checkout ." report should not include failed entries' '
+	test_config_global filter.delay.process \
+		"test-tool rot13-filter --always-delay --log=delayed.log clean smudge delay" &&
+	test_config_global filter.delay.required true &&
+	test_config_global filter.cat.clean cat  &&
+	test_config_global filter.cat.smudge cat  &&
+	test_config_global filter.cat.required true  &&
+
+	set_checkout_config 2 0 &&
+	git init failed_entries &&
+	(
+		cd failed_entries &&
+		cat >.gitattributes <<-EOF &&
+		*delay*              filter=delay
+		parallel-ineligible* filter=cat
+		EOF
+		echo a >missing-delay.a &&
+		echo a >parallel-ineligible.a &&
+		echo a >parallel-eligible.a &&
+		echo b >success-delay.b &&
+		echo b >parallel-ineligible.b &&
+		echo b >parallel-eligible.b &&
+		git add -A &&
+		git commit -m files &&
+
+		a_blob="$(git rev-parse :parallel-ineligible.a)" &&
+		rm .git/objects/$(test_oid_to_path $a_blob) &&
+		rm *.a *.b &&
+
+		test_checkout_workers 2 test_must_fail git checkout . 2>err &&
+
+		# All *.b entries should succeed and all *.a entries should fail:
+		#  - missing-delay.a: the delay filter will drop this path
+		#  - parallel-*.a: the blob will be missing
+		#
+		test_grep "Updated 3 paths from the index" err &&
+		test_stdout_line_count = 3 ls *.b &&
+		! ls *.a
+	)
+'
+
+# Regression test: parallel checkout + fscache stale directory listing.
+#
+# When checkout.workers > 1, checkout_entry_ca() enqueues files for deferred
+# writing instead of writing them inline. The inline write_entry() path calls
+# flush_fscache() after each file, keeping the Windows fscache in sync with
+# newly-created directories. The deferred path skips this flush, so
+# has_dirs_only_path() sees stale ENOENT for directories that mkdir() just
+# created. The recovery path in create_directories() then tries to unlink+
+# recreate the directory, which fails because it already has children.
+#
+# The trigger is: two files sharing a parent directory that does not yet exist
+# on disk when `git checkout <tree> -- <pathspec>` runs.
+test_expect_success MINGW 'parallel checkout with fscache does not fail on new directories' '
+	git init fscache-pc &&
+	(
+		cd fscache-pc &&
+		git config core.fscache true &&
+
+		# Commit B1: files in a nested directory
+		mkdir -p sub/deep/dir &&
+		echo one >sub/deep/dir/file1.txt &&
+		echo two >sub/deep/dir/file2.txt &&
+		git add sub &&
+		git commit -m "B1: with sub/deep/dir" &&
+		git tag B1 &&
+
+		# Commit B2: the directory is gone
+		git rm -rf sub &&
+		git commit -m "B2: without sub" &&
+
+		# Now restore both files from B1 with parallel checkout.
+		# This is the pathspec checkout path (checkout_worktree in
+		# builtin/checkout.c), which defers writes via enqueue_checkout
+		# when workers > 1 and does not flush fscache between entries.
+		git -c checkout.workers=2 \
+		    -c checkout.thresholdForParallelism=0 \
+		    checkout B1 -- sub/deep/dir/file1.txt sub/deep/dir/file2.txt &&
+
+		# Verify both files are correctly restored
+		echo one >expect1 &&
+		echo two >expect2 &&
+		test_cmp expect1 sub/deep/dir/file1.txt &&
+		test_cmp expect2 sub/deep/dir/file2.txt
+	)
+'
+# Windows has no native poll(). compat/poll emulates it with
+# MsgWaitForMultipleObjects(), which cannot wait on more than
+# MAXIMUM_WAIT_OBJECTS objects, so run_parallel_checkout() caps the worker
+# count at MAXIMUM_WAIT_OBJECTS - 2. Without that cap, compat/poll collected
+# one wait handle per polled worker pipe in a fixed-size stack array and
+# smashed the stack.
+#
+# MAXIMUM_WAIT_OBJECTS is 64, hence the expected 62 below. The test is
+# MINGW-only because the cap only exists there; on other platforms the
+# requested 200 workers are used as-is.
+test_expect_success MINGW 'checkout caps workers at the poll limit' '
+	test_when_finished "rm -rf many-workers" &&
+	git init many-workers &&
+	(
+		cd many-workers &&
+		mkdir dir &&
+		for i in $(test_seq 1 200)
+		do
+			echo "content $i" >dir/file$i || return 1
+		done &&
+		git add -A &&
+		git commit -q -m base &&
+
+		git checkout -q -b other &&
+		for i in $(test_seq 1 200)
+		do
+			echo "changed $i" >dir/file$i || return 1
+		done &&
+		git commit -q -a -m changed &&
+		git checkout -q -
+	) &&
+
+	set_checkout_config 200 1 &&
+	test_checkout_workers 62 git -C many-workers checkout other &&
+	verify_checkout many-workers
 '
 
 test_done

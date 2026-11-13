@@ -12,12 +12,15 @@ on:
 
 env:
   CHARACTER_LIMIT: 5000
-  MAX_AGE: 48h
+  MAX_AGE: 7d
 
 jobs:
   job:
+    # Only run this in Git for Windows' fork
+    if: github.event.repository.owner.login == 'git-for-windows'
     runs-on: ubuntu-latest
-    environment: monitor-components
+    permissions:
+      issues: write
     strategy:
       matrix:
         component:
@@ -25,8 +28,8 @@ jobs:
             feed: https://github.com/git/git/tags.atom
           - label: git-lfs
             feed: https://github.com/git-lfs/git-lfs/tags.atom
-          - label: gcm-core
-            feed: https://github.com/microsoft/git-credential-manager-core/tags.atom
+          - label: git-credential-manager
+            feed: https://github.com/git-ecosystem/git-credential-manager/tags.atom
           - label: tig
             feed: https://github.com/jonas/tig/tags.atom
           - label: cygwin
@@ -39,6 +42,10 @@ jobs:
             aggregate: true
           - label: openssh
             feed: https://github.com/openssh/openssh-portable/tags.atom
+          - label: libfido2
+            feed: https://github.com/Yubico/libfido2/tags.atom
+          - label: libcbor
+            feed: https://github.com/PJK/libcbor/tags.atom
           - label: openssl
             feed: https://github.com/openssl/openssl/tags.atom
             title-pattern: ^(?!.*alpha)
@@ -52,24 +59,24 @@ jobs:
             feed: https://github.com/petervanderdoes/gitflow-avh/tags.atom
           - label: curl
             feed: https://github.com/curl/curl/tags.atom
-          - label: libgpg-error
-            feed: https://github.com/gpg/libgpg-error/releases.atom
-            title-pattern: ^libgpg-error-[0-9\.]*$
-          - label: libgcrypt
-            feed: https://github.com/gpg/libgcrypt/releases.atom
-            title-pattern: ^libgcrypt-[0-9\.]*$
-          - label: gpg
-            feed: https://github.com/gpg/gnupg/releases.atom
+            title-pattern: ^(?!rc-)
           - label: mintty
             feed: https://github.com/mintty/mintty/releases.atom
-          - label: p7zip
-            feed: https://sourceforge.net/projects/p7zip/rss?path=/p7zip
+          - label: 7-zip
+            feed: https://sourceforge.net/projects/sevenzip/rss?path=/7-Zip
+            aggregate: true
           - label: bash
             feed: https://git.savannah.gnu.org/cgit/bash.git/atom/?h=master
             aggregate: true
           - label: perl
             feed: https://github.com/Perl/perl5/tags.atom
             title-pattern: ^(?!.*(5\.[0-9]+[13579]|RC))
+          - label: pcre2
+            feed: https://github.com/PCRE2Project/pcre2/tags.atom
+          - label: mingw-w64-llvm
+            feed: https://github.com/msys2/MINGW-packages/commits/master/mingw-w64-llvm.atom
+          - label: innosetup
+            feed: https://github.com/jrsoftware/issrc/tags.atom
       fail-fast: false
     steps:
       - uses: git-for-windows/rss-to-issues@v0
@@ -77,7 +84,7 @@ jobs:
           feed: ${{matrix.component.feed}}
           prefix: "[New ${{matrix.component.label}} version]"
           labels: component-update
-          github-token: ${{ secrets.MONITOR_COMPONENTS_PAT }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           character-limit: ${{ env.CHARACTER_LIMIT }}
           max-age: ${{ env.MAX_AGE }}
           aggregate: ${{matrix.component.aggregate}}

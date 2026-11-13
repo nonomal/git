@@ -29,7 +29,7 @@ test_expect_success setup '
 test_expect_success 'checkout of long paths without core.longpaths fails' '
 	git config core.longpaths false &&
 	test_must_fail git checkout -f 2>error &&
-	grep -q "Filename too long" error &&
+	test_grep -q "Filename too long" error &&
 	test ! -d longpa*
 '
 
@@ -97,6 +97,15 @@ test_expect_success SHORTABSPATH 'clean up path close to MAX_PATH' '
 	 git config core.longpaths yes &&
 	 git clean -fdx) &&
 	test ! -d "$subdir1"
+'
+
+test_expect_success SYMLINKS_WINDOWS 'leave drive-less, short paths intact' '
+	printf "/Program Files" >symlink-target &&
+	symlink_target_oid="$(git hash-object -w --stdin <symlink-target)" &&
+	git update-index --add --cacheinfo 120000,$symlink_target_oid,PF &&
+	git -c core.symlinks=true checkout -- PF &&
+	cmd //c dir >actual &&
+	test_grep "<SYMLINKD\\?> *PF *\\[\\\\Program Files\\]" actual
 '
 
 test_done

@@ -103,7 +103,7 @@ test_expect_success 'setup' '
 test_expect_success 'pull renaming branch into unrenaming one' \
 '
 	git show-branch &&
-	test_expect_code 1 git pull . white &&
+	test_expect_code 1 git pull --no-rebase . white &&
 	git ls-files -s &&
 	test_stdout_line_count = 3 git ls-files -u B &&
 	test_stdout_line_count = 1 git ls-files -s N &&
@@ -119,7 +119,7 @@ test_expect_success 'pull renaming branch into another renaming one' \
 	rm -f B &&
 	git reset --hard &&
 	git checkout red &&
-	test_expect_code 1 git pull . white &&
+	test_expect_code 1 git pull --no-rebase . white &&
 	test_stdout_line_count = 3 git ls-files -u B &&
 	test_stdout_line_count = 1 git ls-files -s N &&
 	sed -ne "/^g/{
@@ -133,7 +133,7 @@ test_expect_success 'pull unrenaming branch into renaming one' \
 '
 	git reset --hard &&
 	git show-branch &&
-	test_expect_code 1 git pull . main &&
+	test_expect_code 1 git pull --no-rebase . main &&
 	test_stdout_line_count = 3 git ls-files -u B &&
 	test_stdout_line_count = 1 git ls-files -s N &&
 	sed -ne "/^g/{
@@ -147,7 +147,7 @@ test_expect_success 'pull conflicting renames' \
 '
 	git reset --hard &&
 	git show-branch &&
-	test_expect_code 1 git pull . blue &&
+	test_expect_code 1 git pull --no-rebase . blue &&
 	test_stdout_line_count = 1 git ls-files -u A &&
 	test_stdout_line_count = 1 git ls-files -u B &&
 	test_stdout_line_count = 1 git ls-files -u C &&
@@ -163,7 +163,7 @@ test_expect_success 'interference with untracked working tree file' '
 	git reset --hard &&
 	git show-branch &&
 	echo >A this file should not matter &&
-	test_expect_code 1 git pull . white &&
+	test_expect_code 1 git pull --no-rebase . white &&
 	test_path_is_file A
 '
 
@@ -173,7 +173,7 @@ test_expect_success 'interference with untracked working tree file' '
 	git show-branch &&
 	rm -f A &&
 	echo >A this file should not matter &&
-	test_expect_code 1 git pull . red &&
+	test_expect_code 1 git pull --no-rebase . red &&
 	test_path_is_file A
 '
 
@@ -183,7 +183,7 @@ test_expect_success 'interference with untracked working tree file' '
 	git checkout -f main &&
 	git tag -f anchor &&
 	git show-branch &&
-	git pull . yellow &&
+	git pull --no-rebase . yellow &&
 	test_path_is_missing M &&
 	git reset --hard anchor
 '
@@ -210,7 +210,7 @@ test_expect_success 'updated working tree file should prevent the merge' '
 	echo >>M one line addition &&
 	cat M >M.saved &&
 	git update-index M &&
-	test_expect_code 128 git pull . yellow &&
+	test_expect_code 2 git pull --no-rebase . yellow &&
 	test_cmp M M.saved &&
 	rm -f M.saved
 '
@@ -222,7 +222,7 @@ test_expect_success 'interference with untracked working tree file' '
 	git tag -f anchor &&
 	git show-branch &&
 	echo >M this file should not matter &&
-	git pull . main &&
+	git pull --no-rebase . main &&
 	test_path_is_file M &&
 	! {
 		git ls-files -s |
@@ -311,14 +311,9 @@ test_expect_success 'Rename+D/F conflict; renamed file merges but dir in way' '
 	git checkout -q renamed-file-has-no-conflicts^0 &&
 	test_must_fail git merge --strategy=recursive dir-in-way >output &&
 
-	test_i18ngrep "CONFLICT (modify/delete): dir/file-in-the-way" output &&
-	test_i18ngrep "Auto-merging dir" output &&
-	if test "$GIT_TEST_MERGE_ALGORITHM" = ort
-	then
-		test_i18ngrep "moving it to dir~HEAD instead" output
-	else
-		test_i18ngrep "Adding as dir~HEAD instead" output
-	fi &&
+	test_grep "CONFLICT (modify/delete): dir/file-in-the-way" output &&
+	test_grep "Auto-merging dir" output &&
+	test_grep "moving it to dir~HEAD instead" output &&
 
 	test_stdout_line_count = 3 git ls-files -u &&
 	test_stdout_line_count = 2 git ls-files -u dir/file-in-the-way &&
@@ -337,15 +332,10 @@ test_expect_success 'Same as previous, but merged other way' '
 	git checkout -q dir-in-way^0 &&
 	test_must_fail git merge --strategy=recursive renamed-file-has-no-conflicts >output 2>errors &&
 
-	! grep "error: refusing to lose untracked file at" errors &&
-	test_i18ngrep "CONFLICT (modify/delete): dir/file-in-the-way" output &&
-	test_i18ngrep "Auto-merging dir" output &&
-	if test "$GIT_TEST_MERGE_ALGORITHM" = ort
-	then
-		test_i18ngrep "moving it to dir~renamed-file-has-no-conflicts instead" output
-	else
-		test_i18ngrep "Adding as dir~renamed-file-has-no-conflicts instead" output
-	fi &&
+	test_grep ! "error: refusing to lose untracked file at" errors &&
+	test_grep "CONFLICT (modify/delete): dir/file-in-the-way" output &&
+	test_grep "Auto-merging dir" output &&
+	test_grep "moving it to dir~renamed-file-has-no-conflicts instead" output &&
 
 	test_stdout_line_count = 3 git ls-files -u &&
 	test_stdout_line_count = 2 git ls-files -u dir/file-in-the-way &&
@@ -400,14 +390,7 @@ test_expect_success 'Rename+D/F conflict; renamed file cannot merge and dir in t
 	test_must_fail git merge --strategy=recursive dir-in-way &&
 
 	test_stdout_line_count = 5 git ls-files -u &&
-	if test "$GIT_TEST_MERGE_ALGORITHM" = ort
-	then
-		test_stdout_line_count = 3 git ls-files -u dir~HEAD
-	else
-		git ls-files -u dir >out &&
-		test 3 -eq $(grep -v file-in-the-way out | wc -l) &&
-		rm -f out
-	fi &&
+	test_stdout_line_count = 3 git ls-files -u dir~HEAD &&
 	test_stdout_line_count = 2 git ls-files -u dir/file-in-the-way &&
 
 	test_must_fail git diff --quiet &&
@@ -425,14 +408,7 @@ test_expect_success 'Same as previous, but merged other way' '
 	test_must_fail git merge --strategy=recursive renamed-file-has-conflicts &&
 
 	test_stdout_line_count = 5 git ls-files -u &&
-	if test "$GIT_TEST_MERGE_ALGORITHM" = ort
-	then
-		test_stdout_line_count = 3 git ls-files -u dir~renamed-file-has-conflicts
-	else
-		git ls-files -u dir >out &&
-		test 3 -eq $(grep -v file-in-the-way out | wc -l) &&
-		rm -f out
-	fi &&
+	test_stdout_line_count = 3 git ls-files -u dir~renamed-file-has-conflicts &&
 	test_stdout_line_count = 2 git ls-files -u dir/file-in-the-way &&
 
 	test_must_fail git diff --quiet &&
@@ -488,12 +464,7 @@ test_expect_success 'both rename source and destination involved in D/F conflict
 	git checkout -q rename-dest^0 &&
 	test_must_fail git merge --strategy=recursive source-conflict &&
 
-	if test "$GIT_TEST_MERGE_ALGORITHM" = ort
-	then
-		test_stdout_line_count = 2 git ls-files -u
-	else
-		test_stdout_line_count = 1 git ls-files -u
-	fi &&
+	test_stdout_line_count = 2 git ls-files -u &&
 
 	test_must_fail git diff --quiet &&
 
@@ -527,63 +498,33 @@ test_expect_success 'setup pair rename to parent of other (D/F conflicts)' '
 	git commit -m "Rename one/file -> two"
 '
 
-if test "$GIT_TEST_MERGE_ALGORITHM" = ort
-then
-	test_expect_success 'pair rename to parent of other (D/F conflicts) w/ untracked dir' '
-		git checkout -q rename-one^0 &&
-		mkdir one &&
-		test_must_fail git merge --strategy=recursive rename-two &&
+test_expect_success 'pair rename to parent of other (D/F conflicts) w/ untracked dir' '
+	git checkout -q rename-one^0 &&
+	mkdir one &&
+	test_must_fail git merge --strategy=recursive rename-two &&
 
-		test_stdout_line_count = 4 git ls-files -u &&
-		test_stdout_line_count = 2 git ls-files -u one &&
-		test_stdout_line_count = 2 git ls-files -u two &&
+	test_stdout_line_count = 4 git ls-files -u &&
+	test_stdout_line_count = 2 git ls-files -u one &&
+	test_stdout_line_count = 2 git ls-files -u two &&
 
-		test_must_fail git diff --quiet &&
+	test_must_fail git diff --quiet &&
 
-		test 3 -eq $(find . | grep -v .git | wc -l) &&
+	test 3 -eq $(find . | grep -v .git | wc -l) &&
 
-		test_path_is_file one &&
-		test_path_is_file two &&
-		test "other" = $(cat one) &&
-		test "stuff" = $(cat two)
-	'
-else
-	test_expect_success 'pair rename to parent of other (D/F conflicts) w/ untracked dir' '
-		git checkout -q rename-one^0 &&
-		mkdir one &&
-		test_must_fail git merge --strategy=recursive rename-two &&
-
-		test_stdout_line_count = 2 git ls-files -u &&
-		test_stdout_line_count = 1 git ls-files -u one &&
-		test_stdout_line_count = 1 git ls-files -u two &&
-
-		test_must_fail git diff --quiet &&
-
-		test 4 -eq $(find . | grep -v .git | wc -l) &&
-
-		test_path_is_dir one &&
-		test_path_is_file one~rename-two &&
-		test_path_is_file two &&
-		test "other" = $(cat one~rename-two) &&
-		test "stuff" = $(cat two)
-	'
-fi
+	test_path_is_file one &&
+	test_path_is_file two &&
+	test "other" = $(cat one) &&
+	test "stuff" = $(cat two)
+'
 
 test_expect_success 'pair rename to parent of other (D/F conflicts) w/ clean start' '
 	git reset --hard &&
 	git clean -fdqx &&
 	test_must_fail git merge --strategy=recursive rename-two &&
 
-	if test "$GIT_TEST_MERGE_ALGORITHM" = ort
-	then
-		test_stdout_line_count = 4 git ls-files -u &&
-		test_stdout_line_count = 2 git ls-files -u one &&
-		test_stdout_line_count = 2 git ls-files -u two
-	else
-		test_stdout_line_count = 2 git ls-files -u &&
-		test_stdout_line_count = 1 git ls-files -u one &&
-		test_stdout_line_count = 1 git ls-files -u two
-	fi &&
+	test_stdout_line_count = 4 git ls-files -u &&
+	test_stdout_line_count = 2 git ls-files -u one &&
+	test_stdout_line_count = 2 git ls-files -u two &&
 
 	test_must_fail git diff --quiet &&
 
@@ -623,22 +564,12 @@ test_expect_success 'check handling of differently renamed file with D/F conflic
 	git checkout -q first-rename^0 &&
 	test_must_fail git merge --strategy=recursive second-rename &&
 
-	if test "$GIT_TEST_MERGE_ALGORITHM" = ort
-	then
-		test_stdout_line_count = 5 git ls-files -s &&
-		test_stdout_line_count = 3 git ls-files -u &&
-		test_stdout_line_count = 1 git ls-files -u one~HEAD &&
-		test_stdout_line_count = 1 git ls-files -u two~second-rename &&
-		test_stdout_line_count = 1 git ls-files -u original &&
-		test_stdout_line_count = 0 git ls-files -o
-	else
-		test_stdout_line_count = 5 git ls-files -s &&
-		test_stdout_line_count = 3 git ls-files -u &&
-		test_stdout_line_count = 1 git ls-files -u one &&
-		test_stdout_line_count = 1 git ls-files -u two &&
-		test_stdout_line_count = 1 git ls-files -u original &&
-		test_stdout_line_count = 2 git ls-files -o
-	fi &&
+	test_stdout_line_count = 5 git ls-files -s &&
+	test_stdout_line_count = 3 git ls-files -u &&
+	test_stdout_line_count = 1 git ls-files -u one~HEAD &&
+	test_stdout_line_count = 1 git ls-files -u two~second-rename &&
+	test_stdout_line_count = 1 git ls-files -u original &&
+	test_stdout_line_count = 0 git ls-files -o &&
 
 	test_path_is_file one/file &&
 	test_path_is_file two/file &&
@@ -952,7 +883,7 @@ test_expect_success 'setup spurious "refusing to lose untracked" message' '
 test_expect_success 'no spurious "refusing to lose untracked" message' '
 	git checkout main^0 &&
 	test_must_fail git merge rename^0 2>errors.txt &&
-	! grep "refusing to lose untracked file" errors.txt
+	test_grep ! "refusing to lose untracked file" errors.txt
 '
 
 test_expect_success 'do not follow renames for empty files' '

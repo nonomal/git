@@ -68,7 +68,8 @@ test_expect_success 'will not overwrite removed file' '
 	git commit -m "rm c1.c" &&
 	cp important c1.c &&
 	test_must_fail git merge c1a &&
-	test_cmp important c1.c
+	test_cmp important c1.c &&
+	rm c1.c  # Do not leave untracked file in way of future tests
 '
 
 test_expect_success 'will not overwrite re-added file' '
@@ -100,19 +101,10 @@ test_expect_success 'will not overwrite unstaged changes in renamed file' '
 	git mv c1.c other.c &&
 	git commit -m rename &&
 	cp important other.c &&
-	if test "$GIT_TEST_MERGE_ALGORITHM" = ort
-	then
-		test_must_fail git merge c1a >out 2>err &&
-		test_i18ngrep "would be overwritten by merge" err &&
-		test_cmp important other.c &&
-		test_path_is_missing .git/MERGE_HEAD
-	else
-		test_must_fail git merge c1a >out &&
-		test_i18ngrep "Refusing to lose dirty file at other.c" out &&
-		test_path_is_file other.c~HEAD &&
-		test $(git hash-object other.c~HEAD) = $(git rev-parse c1a:c1.c) &&
-		test_cmp important other.c
-	fi
+	test_must_fail git merge c1a >out 2>err &&
+	test_grep "would be overwritten by merge" err &&
+	test_cmp important other.c &&
+	test_path_is_missing .git/MERGE_HEAD
 '
 
 test_expect_success 'will not overwrite untracked subtree' '
@@ -197,10 +189,10 @@ test_expect_success 'set up unborn branch and content' '
 
 test_expect_success 'will not clobber WT/index when merging into unborn' '
 	git merge main &&
-	grep foo tracked-file &&
+	test_grep foo tracked-file &&
 	git show :tracked-file >expect &&
-	grep foo expect &&
-	grep bar untracked-file
+	test_grep foo expect &&
+	test_grep bar untracked-file
 '
 
 test_done

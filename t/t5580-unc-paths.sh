@@ -53,6 +53,8 @@ test_expect_success clone '
 '
 
 test_expect_success 'clone without file://' '
+	test_must_fail git clone "$UNCPATH" clone-without-file &&
+	git config set --global --append safe.directory "$UNCPATH/.git" &&
 	git clone "$UNCPATH" clone-without-file
 '
 
@@ -83,7 +85,7 @@ test_expect_success push '
 test_expect_success MINGW 'remote nick cannot contain backslashes' '
 	BACKSLASHED="$(winpwd | tr / \\\\)" &&
 	git ls-remote "$BACKSLASHED" 2>err &&
-	test_i18ngrep ! "unable to access" err
+	test_grep ! "unable to access" err
 '
 
 test_expect_success 'unc alternates' '

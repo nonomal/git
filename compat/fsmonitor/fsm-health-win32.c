@@ -1,45 +1,28 @@
-#include "cache.h"
+#include "git-compat-util.h"
 #include "config.h"
-#include "fsmonitor.h"
+#include "fsmonitor-ll.h"
 #include "fsm-health.h"
 #include "fsmonitor--daemon.h"
+#include "gettext.h"
+#include "simple-ipc.h"
 
 /*
  * Every minute wake up and test our health.
  */
 #define WAIT_FREQ_MS (60 * 1000)
 
-enum interval_fn_ctx { CTX_INIT = 0, CTX_TERM, CTX_TIMER };
+/*
+ * State machine states for each of the interval functions
+ * used for polling our health.
+ */
+enum interval_fn_ctx {
+	CTX_INIT = 0,
+	CTX_TERM,
+	CTX_TIMER
+};
 
 typedef int (interval_fn)(struct fsmonitor_daemon_state *state,
 			  enum interval_fn_ctx ctx);
-
-static interval_fn has_worktree_moved;
-
-static interval_fn *table[] = {
-	has_worktree_moved,
-	NULL, /* must be last */
-};
-
-/*
- * Call all of the functions in the table.
- * Shortcut and return first error.
- *
- * Return 0 if all succeeded.
- */
-static int call_all(struct fsmonitor_daemon_state *state,
-		    enum interval_fn_ctx ctx)
-{
-	int k;
-
-	for (k = 0; table[k]; k++) {
-		int r = table[k](state, ctx);
-		if (r)
-			return r;
-	}
-
-	return 0;
-}
 
 struct fsm_health_data
 {
@@ -56,35 +39,11 @@ struct fsm_health_data
 	} wt_moved;
 };
 
-int fsm_health__ctor(struct fsmonitor_daemon_state *state)
-{
-	struct fsm_health_data *data;
-
-	CALLOC_ARRAY(data, 1);
-
-	data->hEventShutdown = CreateEvent(NULL, TRUE, FALSE, NULL);
-
-	data->hHandles[HEALTH_SHUTDOWN] = data->hEventShutdown;
-	data->nr_handles++;
-
-	state->health_data = data;
-	return 0;
-}
-
-void fsm_health__dtor(struct fsmonitor_daemon_state *state)
-{
-	struct fsm_health_data *data;
-
-	if (!state || !state->health_data)
-		return;
-
-	data = state->health_data;
-
-	CloseHandle(data->hEventShutdown);
-
-	FREE_AND_NULL(state->health_data);
-}
-
+/*
+ * Lookup the system unique ID for the path.  This is as close as
+ * we get to an inode number, but this also contains volume info,
+ * so it is a little stronger.
+ */
 static int lookup_bhfi(wchar_t *wpath,
 		       BY_HANDLE_FILE_INFORMATION *bhfi)
 {
@@ -112,6 +71,12 @@ static int lookup_bhfi(wchar_t *wpath,
 	return 0;
 }
 
+/*
+ * Compare the relevant fields from two system unique IDs.
+ * We use this to see if two different handles to the same
+ * path actually refer to the same *instance* of the file
+ * or directory.
+ */
 static int bhfi_eq(const BY_HANDLE_FILE_INFORMATION *bhfi_1,
 		   const BY_HANDLE_FILE_INFORMATION *bhfi_2)
 {
@@ -202,8 +167,66 @@ static int has_worktree_moved(struct fsmonitor_daemon_state *state,
 		return 0;
 
 	default:
-		die("unhandled case in 'has_worktree_moved': %d",
+		die(_("unhandled case in 'has_worktree_moved': %d"),
 		    (int)ctx);
+	}
+
+	return 0;
+}
+
+
+int fsm_health__ctor(struct fsmonitor_daemon_state *state)
+{
+	struct fsm_health_data *data;
+
+	CALLOC_ARRAY(data, 1);
+
+	data->hEventShutdown = CreateEvent(NULL, TRUE, FALSE, NULL);
+
+	data->hHandles[HEALTH_SHUTDOWN] = data->hEventShutdown;
+	data->nr_handles++;
+
+	state->health_data = data;
+	return 0;
+}
+
+void fsm_health__dtor(struct fsmonitor_daemon_state *state)
+{
+	struct fsm_health_data *data;
+
+	if (!state || !state->health_data)
+		return;
+
+	data = state->health_data;
+
+	CloseHandle(data->hEventShutdown);
+
+	FREE_AND_NULL(state->health_data);
+}
+
+/*
+ * A table of the polling functions.
+ */
+static interval_fn *table[] = {
+	has_worktree_moved,
+	NULL, /* must be last */
+};
+
+/*
+ * Call all of the polling functions in the table.
+ * Shortcut and return first error.
+ *
+ * Return 0 if all succeeded.
+ */
+static int call_all(struct fsmonitor_daemon_state *state,
+		    enum interval_fn_ctx ctx)
+{
+	int k;
+
+	for (k = 0; table[k]; k++) {
+		int r = table[k](state, ctx);
+		if (r)
+			return r;
 	}
 
 	return 0;

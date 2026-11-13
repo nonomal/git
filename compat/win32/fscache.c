@@ -1,10 +1,14 @@
-#include "../../cache.h"
+#include "../../git-compat-util.h"
 #include "../../hashmap.h"
 #include "../win32.h"
 #include "fscache.h"
+#include "../../dir.h"
+#include "../../abspath.h"
+#include "../../trace.h"
 #include "config.h"
 #include "../../mem-pool.h"
 #include "ntifs.h"
+#include "wsl.h"
 
 static volatile long initialized;
 static DWORD dwTlsIndex;
@@ -38,6 +42,8 @@ static struct trace_key trace_fscache = TRACE_KEY_INIT(FSCACHE);
  * An entry in the file system cache. Used for both entire directory listings
  * and file entries.
  */
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
 struct fsentry {
 	struct hashmap_entry ent;
 	mode_t st_mode;
@@ -70,18 +76,26 @@ struct fsentry {
 	 */
 	struct dirent dirent;
 };
+#pragma GCC diagnostic pop
 
+#pragma GCC diagnostic push
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wflexible-array-extensions"
+#endif
 struct heap_fsentry {
-	struct fsentry ent;
-	char dummy[MAX_LONG_PATH];
+	union {
+		struct fsentry ent;
+		char dummy[sizeof(struct fsentry) + MAX_LONG_PATH];
+	} u;
 };
+#pragma GCC diagnostic pop
 
 /*
  * Compares the paths of two fsentry structures for equality.
  */
-static int fsentry_cmp(void *unused_cmp_data,
+static int fsentry_cmp(void *cmp_data UNUSED,
 		       const struct fsentry *fse1, const struct fsentry *fse2,
-		       void *unused_keydata)
+		       void *keydata UNUSED)
 {
 	int res;
 	if (fse1 == fse2)
@@ -96,7 +110,7 @@ static int fsentry_cmp(void *unused_cmp_data,
 	/* if list parts are equal, compare len and name */
 	if (fse1->len != fse2->len)
 		return fse1->len - fse2->len;
-	return strnicmp(fse1->dirent.d_name, fse2->dirent.d_name, fse1->len);
+	return fspathncmp(fse1->dirent.d_name, fse2->dirent.d_name, fse1->len);
 }
 
 /*
@@ -204,7 +218,7 @@ static struct fsentry *fseentry_create_entry(struct fscache *cache,
 	 * telling Git that these are *not* symbolic links.
 	 */
 	if (fse->reparse_tag == IO_REPARSE_TAG_SYMLINK &&
-	    sizeof(buf) > (list ? list->len + 1 : 0) + fse->len + 1 &&
+	    sizeof(buf) > (size_t)(list ? list->len + 1 : 0) + fse->len + 1 &&
 	    is_inside_windows_container()) {
 		size_t off = 0;
 		if (list) {
@@ -229,6 +243,21 @@ static struct fsentry *fseentry_create_entry(struct fscache *cache,
 			     &(fse->u.s.st_mtim));
 	filetime_to_timespec((FILETIME *)&(fdata->CreationTime),
 			     &(fse->u.s.st_ctim));
+	if (fdata->EaSize > 0 &&
+	    sizeof(buf) >= (size_t)(list ? list->len+1 : 0) + fse->len+1 &&
+	    are_wsl_compatible_mode_bits_enabled()) {
+		size_t off = 0;
+		wchar_t wpath[MAX_LONG_PATH];
+		if (list && list->len) {
+			memcpy(buf, list->dirent.d_name, list->len);
+			buf[list->len] = '/';
+			off = list->len + 1;
+		}
+		memcpy(buf + off, fse->dirent.d_name, fse->len);
+		buf[off + fse->len] = '\0';
+		if (xutftowcs_long_path(wpath, buf) >= 0)
+			copy_wsl_mode_bits_from_disk(wpath, -1, &fse->st_mode);
+	}
 
 	return fse;
 }
@@ -255,13 +284,13 @@ static struct fsentry *fsentry_create_list(struct fscache *cache, const struct f
 	/* convert name to UTF-16 and check length */
 	if ((wlen = xutftowcs_path_ex(pattern, dir->dirent.d_name,
 				      MAX_LONG_PATH, dir->len, MAX_PATH - 2,
-				      core_long_paths)) < 0)
+				      are_long_paths_enabled())) < 0)
 		return NULL;
 
 	/* handle CWD */
 	if (!wlen) {
 		wlen = GetCurrentDirectoryW(ARRAY_SIZE(pattern), pattern);
-		if (!wlen || wlen >= ARRAY_SIZE(pattern)) {
+		if (!wlen || wlen >= (ssize_t)ARRAY_SIZE(pattern)) {
 			errno = wlen ? ENAMETOOLONG : err_win_to_posix(GetLastError());
 			return NULL;
 		}
@@ -295,7 +324,7 @@ static struct fsentry *fsentry_create_list(struct fscache *cache, const struct f
 		 * instead of a directory).  Verify that is the actual cause
 		 * of the error.
 		*/
-		if (status == STATUS_INVALID_PARAMETER) {
+		if (status == (NTSTATUS)STATUS_INVALID_PARAMETER) {
 			DWORD attributes = GetFileAttributesW(pattern);
 			if (!(attributes & FILE_ATTRIBUTE_DIRECTORY))
 				status = ERROR_DIRECTORY;
@@ -572,7 +601,12 @@ void fscache_flush(void)
 int fscache_lstat(const char *filename, struct stat *st)
 {
 	int dirlen, base, len;
+#pragma GCC diagnostic push
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wflexible-array-extensions"
+#endif
 	struct heap_fsentry key[2];
+#pragma GCC diagnostic pop
 	struct fsentry *fse;
 	struct fscache *cache = fscache_getcache();
 
@@ -590,11 +624,13 @@ int fscache_lstat(const char *filename, struct stat *st)
 	dirlen = base ? base - 1 : 0;
 
 	/* lookup entry for path + name in cache */
-	fsentry_init(&key[0].ent, NULL, filename, dirlen);
-	fsentry_init(&key[1].ent, &key[0].ent, filename + base, len - base);
-	fse = fscache_get(cache, &key[1].ent);
-	if (!fse)
+	fsentry_init(&key[0].u.ent, NULL, filename, dirlen);
+	fsentry_init(&key[1].u.ent, &key[0].u.ent, filename + base, len - base);
+	fse = fscache_get(cache, &key[1].u.ent);
+	if (!fse) {
+		errno = ENOENT;
 		return -1;
+	}
 
 	/*
 	 * Special case symbolic links: FindFirstFile()/FindNextFile() did not
@@ -633,7 +669,12 @@ int fscache_lstat(const char *filename, struct stat *st)
 int fscache_is_mount_point(struct strbuf *path)
 {
 	int dirlen, base, len;
+#pragma GCC diagnostic push
+#ifdef __clang__
+#pragma GCC diagnostic ignored "-Wflexible-array-extensions"
+#endif
 	struct heap_fsentry key[2];
+#pragma GCC diagnostic pop
 	struct fsentry *fse;
 	struct fscache *cache = fscache_getcache();
 
@@ -651,9 +692,9 @@ int fscache_is_mount_point(struct strbuf *path)
 	dirlen = base ? base - 1 : 0;
 
 	/* lookup entry for path + name in cache */
-	fsentry_init(&key[0].ent, NULL, path->buf, dirlen);
-	fsentry_init(&key[1].ent, &key[0].ent, path->buf + base, len - base);
-	fse = fscache_get(cache, &key[1].ent);
+	fsentry_init(&key[0].u.ent, NULL, path->buf, dirlen);
+	fsentry_init(&key[1].u.ent, &key[0].u.ent, path->buf + base, len - base);
+	fse = fscache_get(cache, &key[1].u.ent);
 	if (!fse)
 		return mingw_is_mount_point(path);
 	return fse->reparse_tag == IO_REPARSE_TAG_MOUNT_POINT;
@@ -713,8 +754,8 @@ DIR *fscache_opendir(const char *dirname)
 		len--;
 
 	/* get directory listing from cache */
-	fsentry_init(&key.ent, NULL, dirname, len);
-	list = fscache_get(cache, &key.ent);
+	fsentry_init(&key.u.ent, NULL, dirname, len);
+	list = fscache_get(cache, &key.u.ent);
 	if (!list)
 		return NULL;
 

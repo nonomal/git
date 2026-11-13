@@ -36,8 +36,19 @@ relationship between packs and objects is as follows:
 
 . ./test-lib.sh
 
+if test_have_prereq WITH_BREAKING_CHANGES
+then
+	skip_all='skipping git-pack-redundant tests; built with breaking changes'
+	test_done
+fi
+
 main_repo=main.git
 shared_repo=shared.git
+
+test_expect_success 'pack-redundant needs --i-still-use-this' '
+	test_must_fail git pack-redundant >message 2>&1 &&
+	test_grep "will be removed soon" message
+'
 
 git_pack_redundant='git pack-redundant --i-still-use-this'
 
@@ -114,9 +125,9 @@ test_expect_success 'setup main repo' '
 	create_commits_in "$main_repo" A B C D E F G H I J K L M N O P Q R
 '
 
-test_expect_success 'master: pack-redundant works with no packfile' '
+test_expect_success 'main: pack-redundant works with no packfile' '
 	(
-		cd "$master_repo" &&
+		cd "$main_repo" &&
 		cat >expect <<-EOF &&
 			fatal: Zero packs found!
 			EOF

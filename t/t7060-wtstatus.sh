@@ -9,6 +9,7 @@ export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
 test_expect_success setup '
 	git config --global advice.statusuoption false &&
+	echo "/.gitconfig" >>.git/info/exclude &&
 	test_commit A &&
 	test_commit B oneside added &&
 	git checkout A^0 &&
@@ -64,7 +65,7 @@ EOF
 
 test_expect_success 'rename & unmerged setup' '
 	git rm -f -r . &&
-	cat "$TEST_DIRECTORY/lib-diff/README" >ONE &&
+	cat "$TEST_DIRECTORY/README" >ONE &&
 	git add ONE &&
 	test_tick &&
 	git commit -m "One commit with ONE" &&
@@ -221,7 +222,6 @@ test_expect_success 'status --branch with detached HEAD' '
 	git status --branch --porcelain >actual &&
 	cat >expected <<-EOF &&
 	## HEAD (no branch)
-	?? .gitconfig
 	?? actual
 	?? expect
 	?? expected
@@ -237,7 +237,6 @@ test_expect_success 'status --porcelain=v1 --branch with detached HEAD' '
 	git status --branch --porcelain=v1 >actual &&
 	cat >expected <<-EOF &&
 	## HEAD (no branch)
-	?? .gitconfig
 	?? actual
 	?? expect
 	?? expected

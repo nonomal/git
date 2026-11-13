@@ -39,8 +39,8 @@ When running `make`, you can use `-j$(nproc)` to automatically use the number of
 on your machine as the number of concurrent build processes.
 
 You can go deeper on the Windows-specific build process by reading the
-[technical overview](https://github.com/git-for-windows/git/wiki/Technical-overview) or the
-[guide to compiling Git with Visual Studio](https://github.com/git-for-windows/git/wiki/Compiling-Git-with-Visual-Studio).
+[technical overview](https://gitforwindows.org/technical-overview) or the
+[guide to compiling Git with Visual Studio](https://gitforwindows.org/compiling-git-with-visual-studio).
 
 ## Building `git` on Windows with Visual Studio
 
@@ -120,7 +120,7 @@ you want to extend the functional tests to be sure no one breaks your feature in
 ### Functional Tests
 
 Navigate to the `t/` directory and type `make` to run all tests or use `prove` as
-[described in the Git for Windows wiki](https://github.com/git-for-windows/git/wiki/Building-Git):
+[described on this Git for Windows page](https://gitforwindows.org/building-git):
 
 ```
 prove -j12 --state=failed,save ./t[0-9]*.sh
@@ -261,7 +261,7 @@ There are many virtual machine alternatives available, if you do not have such a
   network if shut down incorrectly).
 * Provide as many cores to your VM as you can (for parallel builds).
 * Restart your VM, but do not connect.
-* Use `ssh` in Git Bash, download [PuTTY](http://www.putty.org/), or use your favorite SSH client to connect to the VM through SSH.
+* Use `ssh` in Git Bash, download [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/), or use your favorite SSH client to connect to the VM through SSH.
 
 In order to build and use `git`, you will need the following libraries via `apt-get`:
 
@@ -367,7 +367,7 @@ To construct a patch set, use the `git format-patch` command. There are three im
   `git branch --edit-description`, you will end up with a 0/N mail with that description and
   a nice overall diffstat.
 * `--in-reply-to=[Message-ID]`: This will mark your cover letter as replying to the given
-  message (which should correspond to your previous iteration). To determine the correct Message-ID,
+  message (which should correspond to your first iteration). To determine the correct Message-ID,
   find the message you are replying to on [public-inbox.org/git](https://public-inbox.org/git) and take
   the ID from between the angle brackets.
 
@@ -413,5 +413,5 @@ To submit a nth version patch (say version 3):
 
 ```
 git send-email --to=git@vger.kernel.org --cc=<email1> --cc=<email2> \
-    --in-reply-to=<the message id of cover letter of patch v2> [dir with patches]/*.patch
+    --in-reply-to=<the message id of cover letter of patch v1> [dir with patches]/*.patch
 ```

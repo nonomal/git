@@ -81,6 +81,46 @@ test_expect_success 'apply with --3way with merge.conflictStyle = diff3' '
 	test_apply_with_3way
 '
 
+test_apply_with_3way_favoritism () {
+	apply_arg=$1
+	merge_arg=$2
+
+	# Merging side should be similar to applying this patch
+	git diff ...side >P.diff &&
+
+	# The corresponding conflicted merge
+	git reset --hard &&
+	git checkout main^0 &&
+	git merge --no-commit $merge_arg side &&
+	git ls-files -s >expect.ls &&
+	print_sanitized_conflicted_diff >expect.diff &&
+
+	# should apply successfully
+	git reset --hard &&
+	git checkout main^0 &&
+	git apply --index --3way $apply_arg P.diff &&
+	git ls-files -s >actual.ls &&
+	print_sanitized_conflicted_diff >actual.diff &&
+
+	# The result should resemble the corresponding merge
+	test_cmp expect.ls actual.ls &&
+	test_cmp expect.diff actual.diff
+}
+
+test_expect_success 'apply with --3way --ours' '
+	test_apply_with_3way_favoritism --ours -Xours
+'
+
+test_expect_success 'apply with --3way --theirs' '
+	test_apply_with_3way_favoritism --theirs -Xtheirs
+'
+
+test_expect_success 'apply with --3way --union' '
+	echo "* merge=union" >.gitattributes &&
+	test_apply_with_3way_favoritism --union &&
+	rm .gitattributes
+'
+
 test_expect_success 'apply with --3way with rerere enabled' '
 	test_config rerere.enabled true &&
 
@@ -228,6 +268,69 @@ test_expect_success 'apply with --3way --cached and conflicts' '
 	# However the working directory should not change
 	>expect.diff &&
 	test_cmp expect.diff actual.diff
+'
+
+test_expect_success 'apply binary file patch' '
+	git reset --hard main &&
+	cp "$TEST_DIRECTORY/lib-diff/test-binary-1.png" bin.png &&
+	git add bin.png &&
+	git commit -m "add binary file" &&
+
+	cp "$TEST_DIRECTORY/lib-diff/test-binary-2.png" bin.png &&
+
+	git diff --binary >bin.diff &&
+	git reset --hard &&
+
+	# Apply must succeed.
+	git apply bin.diff
+'
+
+test_expect_success 'apply binary file patch with 3way' '
+	git reset --hard main &&
+	cp "$TEST_DIRECTORY/lib-diff/test-binary-1.png" bin.png &&
+	git add bin.png &&
+	git commit -m "add binary file" &&
+
+	cp "$TEST_DIRECTORY/lib-diff/test-binary-2.png" bin.png &&
+
+	git diff --binary >bin.diff &&
+	git reset --hard &&
+
+	# Apply must succeed.
+	git apply --3way --index bin.diff
+'
+
+test_expect_success 'apply full-index patch with 3way' '
+	git reset --hard main &&
+	cp "$TEST_DIRECTORY/lib-diff/test-binary-1.png" bin.png &&
+	git add bin.png &&
+	git commit -m "add binary file" &&
+
+	cp "$TEST_DIRECTORY/lib-diff/test-binary-2.png" bin.png &&
+
+	git diff --full-index >bin.diff &&
+	git reset --hard &&
+
+	# Apply must succeed.
+	git apply --3way --index bin.diff
+'
+
+test_expect_success 'apply delete then new patch with 3way' '
+	git reset --hard main &&
+	test_write_lines 2 > delnew &&
+	git add delnew &&
+	git diff --cached >> new.patch &&
+	git reset --hard &&
+	test_write_lines 1 > delnew &&
+	git add delnew &&
+	git commit -m "delnew" &&
+	rm delnew &&
+	git diff >> delete-then-new.patch &&
+	cat new.patch >> delete-then-new.patch &&
+
+	git checkout -- . &&
+	# Apply must succeed.
+	git apply --3way delete-then-new.patch
 '
 
 test_done

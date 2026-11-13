@@ -8,7 +8,7 @@
 
 struct dirent {
 	unsigned char d_type; /* file type to prevent lstat after readdir */
-	char d_name[FLEX_ARRAY]; /* file name */
+	char d_name[/* FLEX_ARRAY */]; /* file name */
 };
 
 /*
@@ -22,6 +22,8 @@ typedef struct DIR {
 
 /* default dirent implementation */
 extern DIR *dirent_opendir(const char *dirname);
+
+#define opendir git_opendir
 
 /* current dirent implementation */
 extern DIR *(*opendir)(const char *dirname);
